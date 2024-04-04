@@ -16,16 +16,19 @@
 #define kir 0
 #define kdr 0
 
-class rotation_node
-{
+class rotation_node {
 private:
     ros::NodeHandle n;
 
     // communication with detection_node or datmo_node
-    ros::Subscriber sub_goal_to_reach;
+    //ros::Subscriber sub_goal_to_reach;
+
+    // communication with rotation_to_do
+    ros::Subscriber sub_rotation_to_do;
 
     // communication with odometry
     ros::Subscriber sub_odometry;
+    ros::Publisher pub_odometry;
 
     // communication with cmd_vel to send command to the mobile robot
     ros::Publisher pub_cmd_vel;
@@ -48,8 +51,7 @@ private:
     bool init_odom;
 
 public:
-    rotation_node()
-    {
+    rotation_node() {
 
         // communication with cmd_vel to command the mobile robot
         pub_cmd_vel = n.advertise<geometry_msgs::Twist>("cmd_vel", 1);
@@ -58,7 +60,8 @@ public:
         sub_odometry = n.subscribe("odom", 1, &rotation_node::odomCallback, this);
 
         // communication with datmo
-        sub_goal_to_reach = n.subscribe("goal_to_reach", 1, &rotation_node::goal_to_reachCallback, this);
+        //sub_goal_to_reach = n.subscribe("goal_to_reach", 1, &rotation_node::goal_to_reachCallback, this);
+        sub_rotation_to_do = n.subscribe("rotation_to_do", 1, &rotation_node::rotation_to_doCallback, this);
 
         new_goal_to_reach = false;
         init_odom = false;
@@ -66,8 +69,7 @@ public:
 
         // INFINITE LOOP TO COLLECT LASER DATA AND PROCESS THEM
         ros::Rate r(10); // this node will run at 10hz
-        while (ros::ok())
-        {
+        while (ros::ok()) {
             ros::spinOnce(); // each callback is called once to collect new data: laser + robot_moving
             update();        // processing of data
             r.sleep();       // we wait if the processing (ie, callback+update) has taken less than 0.1s (ie, 10 hz)
@@ -77,20 +79,17 @@ public:
     // UPDATE: main processing
     /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-    void update()
-    {
+    void update() {
 
-        if (init_odom)
-        {
+        if (init_odom) {
 
-            // we receive a new /goal_to_reach
-            ROS_INFO("\n\tnew goal to reach = %d\n", new_goal_to_reach);
-            if (new_goal_to_reach)
-                init_rotation();
+//             // we receive a new /goal_to_reach
+//             ROS_INFO("\n\tnew goal to reach = %d\n", new_goal_to_reach);
+//             if (new_goal_to_reach)
+//                 init_rotation();
 
             // we are performing a rotation
-            if (cond_rotation)
-            {
+            if (fabs(rotation_to_do) > error_rotation_threshold) {
                 compute_rotation();
                 move_robot();
             }
@@ -98,10 +97,9 @@ public:
 
     } // update
 
-    void init_rotation()
-    {
+    void init_rotation() {
 
-        initial_orientation = current_orientation;
+        /*initial_orientation = current_orientation;
         error_rotation = 0;
         error_integral_rotation = 0;
         error_previous_rotation = 0;
@@ -113,10 +111,9 @@ public:
         // we compute the /translation_to_do
         translation_to_do = sqrt((goal_to_reach.x * goal_to_reach.x) + (goal_to_reach.y * goal_to_reach.y));
 
-        if (translation_to_do)
-        {
+        if (translation_to_do) {
 
-            // we compute the /rotation_to_do
+            // we compute the /rotation_to_dooal
             rotation_to_do = acos(goal_to_reach.x / translation_to_do);
 
             cond_rotation = fabs(rotation_to_do) > error_rotation_threshold;
@@ -130,57 +127,60 @@ public:
 
             // ROS_INFO("rotation_to_do: %f, translation_to_do: %f", rotation_to_do*180/M_PI, translation_to_do);
             ROS_WARN("rotation_to_do: %f, translation_to_do: %f", rotation_to_do * 180 / M_PI, translation_to_do);
-        }
-        else
-        {
+        } else {
             ROS_WARN("translation_to_do is equal to 0");
             rotation_to_do = 0;
-        }
+        }*/
 
-        getchar();
 
+        cond_rotation = fabs(rotation_to_do) > error_rotation_threshold;
+
+        // we initialize the pid for the control of rotation
+        error_integral_rotation = 0;
+        error_previous_rotation = 0;
+
+        // ROS_INFO("rotation_to_do: %f, translation_to_do: %f", rotation_to_do*180/M_PI, translation_to_do);
+        ROS_WARN("rotation_to_do: %f, translation_to_do: %f", rotation_to_do * 180 / M_PI, translation_to_do);
     } // init_rotation
 
-    void compute_rotation()
-    {
+    void compute_rotation() {
 
-        ROS_INFO("current_orientation: %f, initial_orientation: %f", current_orientation * 180 / M_PI, initial_orientation * 180 / M_PI);
+        ROS_INFO("current_orientation: %f, initial_orientation: %f", current_orientation * 180 / M_PI,
+                 initial_orientation * 180 / M_PI);
 
         rotation_done = current_orientation - initial_orientation;
 
         // do not forget that rotation_done must always be between -M_PI and +M_PI
-        if (rotation_done > M_PI)
-        {
-            ROS_WARN("rotation_done > 180 degrees: %f degrees -> %f degrees", rotation_done * 180 / M_PI, (rotation_done - 2 * M_PI) * 180 / M_PI);
+        if (rotation_done > M_PI) {
+            ROS_WARN("rotation_done > 180 degrees: %f degrees -> %f degrees", rotation_done * 180 / M_PI,
+                     (rotation_done - 2 * M_PI) * 180 / M_PI);
             rotation_done -= 2 * M_PI;
-        }
-        else if (rotation_done < -M_PI)
-        {
-            ROS_WARN("rotation_done < -180 degrees: %f degrees -> %f degrees", rotation_done * 180 / M_PI, (rotation_done + 2 * M_PI) * 180 / M_PI);
+        } else if (rotation_done < -M_PI) {
+            ROS_WARN("rotation_done < -180 degrees: %f degrees -> %f degrees", rotation_done * 180 / M_PI,
+                     (rotation_done + 2 * M_PI) * 180 / M_PI);
             rotation_done += 2 * M_PI;
         }
 
         error_rotation = rotation_to_do - rotation_done;
         ROS_INFO("rotation_done : %f", rotation_done);
         // do not forget that error_rotation must always be between -M_PI and +M_PI
-        if (error_rotation > M_PI)
-        {
-            ROS_WARN("error_rotation_done > 180 degrees: %f degrees -> %f degrees", error_rotation * 180 / M_PI, (error_rotation - 2 * M_PI) * 180 / M_PI);
+        if (error_rotation > M_PI) {
+            ROS_WARN("error_rotation_done > 180 degrees: %f degrees -> %f degrees", error_rotation * 180 / M_PI,
+                     (error_rotation - 2 * M_PI) * 180 / M_PI);
             error_rotation -= 2 * M_PI;
-        }
-        else if (error_rotation < -M_PI)
-        {
-            ROS_WARN("error_rotation < -180 degrees: %f degrees -> %f degrees", error_rotation * 180 / M_PI, (error_rotation + 2 * M_PI) * 180 / M_PI);
+        } else if (error_rotation < -M_PI) {
+            ROS_WARN("error_rotation < -180 degrees: %f degrees -> %f degrees", error_rotation * 180 / M_PI,
+                     (error_rotation + 2 * M_PI) * 180 / M_PI);
             error_rotation += 2 * M_PI;
         }
 
         // cond_rotation = ...; cond_rotation is used to control if we stop or not the pid TO COMPLETE. take care that rotation_to_do could be negative
         cond_rotation = (fabs(error_rotation) > error_rotation_threshold);
-        ROS_INFO("rotation_to_do: %f, rotation_done: %f, error_rotation: %f, cond_rotation: %i", rotation_to_do * 180 / M_PI, rotation_done * 180 / M_PI, error_rotation * 180 / M_PI, cond_rotation);
+        ROS_INFO("rotation_to_do: %f, rotation_done: %f, error_rotation: %f, cond_rotation: %i",
+                 rotation_to_do * 180 / M_PI, rotation_done * 180 / M_PI, error_rotation * 180 / M_PI, cond_rotation);
 
         rotation_speed = 0;
-        if (cond_rotation)
-        {
+        if (cond_rotation) {
             // Implementation of a PID controller for rotation_to_do;
 
             float error_derivation_rotation = error_previous_rotation - error_rotation;
@@ -191,17 +191,16 @@ public:
             ROS_INFO("error_integral_rotation: %f", error_integral_rotation);
 
             // control of rotation with a PID controller
-            rotation_speed = (kpr * error_rotation) + (kir * error_integral_rotation) + (kdr * error_derivation_rotation);
+            rotation_speed =
+                    (kpr * error_rotation) + (kir * error_integral_rotation) + (kdr * error_derivation_rotation);
             ROS_WARN("rotation_speed: %f", rotation_speed * 180 / M_PI);
             getchar();
-        }
-        else
+        } else
             ROS_WARN("pid of rotation will stop");
 
     } // compute_rotation
 
-    void move_robot()
-    {
+    void move_robot() {
         ROS_INFO("MOVE ROBOT");
 
         geometry_msgs::Twist twist;
@@ -227,31 +226,34 @@ public:
     // CALLBACKS
     /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-    void odomCallback(const nav_msgs::Odometry::ConstPtr &o)
-    {
+    void odomCallback(const nav_msgs::Odometry::ConstPtr &o) {
 
         init_odom = true;
         current_orientation = tf::getYaw(o->pose.pose.orientation);
     }
 
-    void goal_to_reachCallback(const geometry_msgs::Point::ConstPtr &g)
-    {
+    void goal_to_reachCallback(const geometry_msgs::Point::ConstPtr &g) {
         // process the goal received from moving_persons detector
 
         new_goal_to_reach = true;
         goal_to_reach = *g;
     }
 
+    void rotation_to_doCallback(const geometry_msgs::Point::ConstPtr &r) {
+        // process the goal received from decision node
+
+        new_goal_to_reach = true;
+        goal_to_reach = *r;
+    }
+
     // Distance between two points
-    float distancePoints(geometry_msgs::Point pa, geometry_msgs::Point pb)
-    {
+    float distancePoints(geometry_msgs::Point pa, geometry_msgs::Point pb) {
 
         return sqrt(pow((pa.x - pb.x), 2.0) + pow((pa.y - pb.y), 2.0));
     }
 };
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 
     ros::init(argc, argv, "rotation_node");
 
