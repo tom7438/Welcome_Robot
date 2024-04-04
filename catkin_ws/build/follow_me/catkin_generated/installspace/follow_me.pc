@@ -1,0 +1,8 @@
+prefix=/home/student-3/catkin_ws/install
+
+Name: follow_me
+Description: Description of follow_me
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

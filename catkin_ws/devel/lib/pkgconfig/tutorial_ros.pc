@@ -1,0 +1,8 @@
+prefix=/home/student-3/catkin_ws/devel
+
+Name: tutorial_ros
+Description: Description of tutorial_ros
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
