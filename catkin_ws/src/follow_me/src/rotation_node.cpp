@@ -83,13 +83,13 @@ public:
 
         if (init_odom) {
 
-//             // we receive a new /goal_to_reach
-//             ROS_INFO("\n\tnew goal to reach = %d\n", new_goal_to_reach);
-//             if (new_goal_to_reach)
-//                 init_rotation();
+             // we receive a new /rotation_to_do
+             ROS_INFO("\n\trotation_to_do = %d\n", rotation_to_do);
+             if (new_goal_to_reach)
+                 init_rotation();
 
             // we are performing a rotation
-            if (fabs(rotation_to_do) > error_rotation_threshold) {
+            if (cond_rotation) {
                 compute_rotation();
                 move_robot();
             }
@@ -131,7 +131,7 @@ public:
             ROS_WARN("translation_to_do is equal to 0");
             rotation_to_do = 0;
         }*/
-
+        new_goal_to_reach = false;
 
         cond_rotation = fabs(rotation_to_do) > error_rotation_threshold;
 
@@ -140,7 +140,8 @@ public:
         error_previous_rotation = 0;
 
         // ROS_INFO("rotation_to_do: %f, translation_to_do: %f", rotation_to_do*180/M_PI, translation_to_do);
-        ROS_WARN("rotation_to_do: %f, translation_to_do: %f", rotation_to_do * 180 / M_PI, translation_to_do);
+        if (cond_rotation)
+            ROS_WARN("rotation_to_do: %f", rotation_to_do * 180 / M_PI);
     } // init_rotation
 
     void compute_rotation() {
@@ -194,7 +195,7 @@ public:
             rotation_speed =
                     (kpr * error_rotation) + (kir * error_integral_rotation) + (kdr * error_derivation_rotation);
             ROS_WARN("rotation_speed: %f", rotation_speed * 180 / M_PI);
-            getchar();
+            //getchar();
         } else
             ROS_WARN("pid of rotation will stop");
 
@@ -219,7 +220,7 @@ public:
         twist.angular.z = rotation_speed;
         ROS_WARN("rotation speed = %f\n", rotation_speed);
         pub_cmd_vel.publish(twist);
-        getchar();
+        //getchar();
 
     } // move_robot
 
@@ -239,11 +240,13 @@ public:
         goal_to_reach = *g;
     }
 
-    void rotation_to_doCallback(const geometry_msgs::Point::ConstPtr &r) {
+    // Récupère le float directement envoyé par decision_node
+    void rotation_to_doCallback(const std_msgs::Float32::ConstPtr &r) {
         // process the goal received from decision node
 
         new_goal_to_reach = true;
-        goal_to_reach = *r;
+        //goal_to_reach = *r;
+        rotation_to_do = r->data;
     }
 
     // Distance between two points

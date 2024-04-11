@@ -22,8 +22,7 @@ int nb_static = 5;
 
 using namespace std;
 
-class robot_moving_node
-{
+class robot_moving_node {
 private:
     ros::NodeHandle n;
 
@@ -40,8 +39,7 @@ private:
     bool new_odom; // to check if new data of odometry is available or not
 
 public:
-    robot_moving_node()
-    {
+    robot_moving_node() {
 
         // communication with person_detector
         pub_robot_moving = n.advertise<std_msgs::Bool>("robot_moving", 1);
@@ -58,8 +56,7 @@ public:
 
         ros::Rate r(10); // this node is updated at 20hz
 
-        while (ros::ok())
-        {
+        while (ros::ok()) {
             ros::spinOnce();
             update();
             r.sleep();
@@ -67,8 +64,7 @@ public:
 
     } // robot_moving_node
 
-    void odomCallback(const nav_msgs::Odometry::ConstPtr &o)
-    {
+    void odomCallback(const nav_msgs::Odometry::ConstPtr &o) {
 
         new_odom = true;
         position.x = o->pose.pose.position.x;
@@ -77,29 +73,23 @@ public:
 
     } // odomCallback
 
-    void update()
-    {
+    void update() {
 
-        if (new_odom)
-        { // we wait for new data of odometry
+        if (new_odom) { // we wait for new data of odometry
             new_odom = false;
-            if ((not_moving_position.x == position.x) && (not_moving_position.y == position.y) && (not_moving_orientation == orientation))
-            {
+            if ((not_moving_position.x == position.x) && (not_moving_position.y == position.y) &&
+                (not_moving_orientation == orientation)) {
                 count++;
-                if ((count == nb_static) && (moving))
-                {
+                if ((count == nb_static) && (moving)) {
                     ROS_INFO("robot is not moving");
                     moving = false;
                 }
-            }
-            else
-            {
+            } else {
                 not_moving_position.x = position.x;
                 not_moving_position.y = position.y;
                 not_moving_orientation = orientation;
                 count = 0;
-                if (!moving)
-                {
+                if (!moving) {
                     ROS_INFO("robot is moving");
                     moving = true;
                 }
@@ -114,8 +104,7 @@ public:
     } // update
 };
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 
     ros::init(argc, argv, "robot_moving_node");
     ros::NodeHandle n;

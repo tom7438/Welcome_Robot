@@ -1,20 +1,23 @@
 #include <datmo.h>
 
-datmo::datmo()
-{
+datmo::datmo() {
 
     sub_scan = n.subscribe("scan", 1, &datmo::scanCallback, this);
     sub_robot_moving = n.subscribe("robot_moving", 1, &datmo::robot_movingCallback, this);
 
     // communication with action
-    pub_datmo = n.advertise<geometry_msgs::Point>("goal_to_reach", 1); // Preparing a topic to publish the goal to reach.
+    //pub_datmo = n.advertise<geometry_msgs::Point>("goal_to_reach", 1); // Preparing a topic to publish the goal to reach.
 
-    pub_datmo_marker = n.advertise<visualization_msgs::Marker>("datmo_marker", 1); // Preparing a topic to publish our results. This will be used by the visualization tool rviz
+    pub_datmo_marker = n.advertise<visualization_msgs::Marker>("datmo_marker",
+                                                               1); // Preparing a topic to publish our results. This will be used by the visualization tool rviz
     pub_motion_marker = n.advertise<visualization_msgs::Marker>("motion_marker", 1);
     pub_clusters_marker = n.advertise<visualization_msgs::Marker>("clusters_marker", 1);
     pub_legs_marker = n.advertise<visualization_msgs::Marker>("legs_marker", 1);
     pub_persons_marker = n.advertise<visualization_msgs::Marker>("persons_marker", 1);
     pub_tracked_person_marker = n.advertise<visualization_msgs::Marker>("tracked_person_marker", 1);
+
+    // person position
+    pub_person_position = n.advertise<geometry_msgs::Point>("person_position", 1);
 
     new_laser = false;
     new_robot = false;
@@ -27,16 +30,14 @@ datmo::datmo()
 
     ros::Rate r(10);
 
-    while (ros::ok())
-    {
+    while (ros::ok()) {
         ros::spinOnce();
         update();
         r.sleep();
     }
 }
 
-datmo::datmo(char *goal_name)
-{
+datmo::datmo(char *goal_name) {
 
     sub_scan = n.subscribe("scan", 1, &datmo::scanCallback, this);
     sub_robot_moving = n.subscribe("robot_moving", 1, &datmo::robot_movingCallback, this);
@@ -44,7 +45,8 @@ datmo::datmo(char *goal_name)
     // communication with action
     pub_datmo = n.advertise<geometry_msgs::Point>(goal_name, 1); // Preparing a topic to publish the goal to reach.
 
-    pub_datmo_marker = n.advertise<visualization_msgs::Marker>("datmo_marker", 1); // Preparing a topic to publish our results. This will be used by the visualization tool rviz
+    pub_datmo_marker = n.advertise<visualization_msgs::Marker>("datmo_marker",
+                                                               1); // Preparing a topic to publish our results. This will be used by the visualization tool rviz
 
     new_laser = false;
     new_robot = false;
@@ -55,8 +57,7 @@ datmo::datmo(char *goal_name)
 
     ros::Rate r(10);
 
-    while (ros::ok())
-    {
+    while (ros::ok()) {
         ros::spinOnce();
         update();
         r.sleep();
@@ -66,8 +67,7 @@ datmo::datmo(char *goal_name)
 // DETECT MOTION FOR BOTH LASER
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void datmo::store_background()
-{
+void datmo::store_background() {
     // store all the hits of the laser in the background table
 
     ROS_INFO("storing background");
@@ -79,8 +79,7 @@ void datmo::store_background()
 
 } // store_background
 
-void datmo::reset_motion()
-{
+void datmo::reset_motion() {
     // for each hit, we reset the dynamic table
 
     ROS_INFO("reset motion");
@@ -90,14 +89,12 @@ void datmo::reset_motion()
 
 } // reset_motion
 
-void datmo::detect_motion()
-{
+void datmo::detect_motion() {
     // for each hit, compare the current range with the background to detect motion
 
     ROS_INFO("detecting motion");
     int diff;
-    for (int loop_hit = 0; loop_hit < nb_beams; loop_hit++)
-    {
+    for (int loop_hit = 0; loop_hit < nb_beams; loop_hit++) {
         diff = background[loop_hit] - r[loop_hit];
         dynamic[loop_hit] = sqrt(pow(diff, 2.0)) > detection_threshold;
     }
@@ -109,14 +106,12 @@ void datmo::detect_motion()
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 // Distance between two points
-float datmo::distancePoints(geometry_msgs::Point pa, geometry_msgs::Point pb)
-{
+float datmo::distancePoints(geometry_msgs::Point pa, geometry_msgs::Point pb) {
 
     return sqrt(pow((pa.x - pb.x), 2.0) + pow((pa.y - pb.y), 2.0));
 }
 
-void datmo::perform_clustering()
-{
+void datmo::perform_clustering() {
 
     ROS_INFO("performing clustering");
 
@@ -127,8 +122,7 @@ void datmo::perform_clustering()
 
 } // perform_clustering
 
-void datmo::perform_basic_clustering()
-{
+void datmo::perform_basic_clustering() {
     // TO COMPLETE
     // we perform the clustering as described in the lecture on perception
     // the data related to each cluster are stored in cluster_start, cluster_end and nb_cluster: see datmo.h for more details
@@ -137,12 +131,10 @@ void datmo::perform_basic_clustering()
 
     nb_clusters = 0;
 
-    for (int loop_hit = 1; loop_hit < nb_beams; loop_hit++)
-    {
+    for (int loop_hit = 1; loop_hit < nb_beams; loop_hit++) {
         /*     if EUCLIDIAN DISTANCE between (the previous hit and the current one) is higher than "cluster_threshold"
                 {//the current hit doesnt belong to the same cluster*/
-        if (distancePoints(current_scan[loop_hit], current_scan[loop_hit - 1]) > detection_threshold)
-        {
+        if (distancePoints(current_scan[loop_hit], current_scan[loop_hit - 1]) > detection_threshold) {
             cluster_end[nb_clusters] = loop_hit - 1;
             nb_clusters++;
             cluster_start[nb_clusters] = loop_hit;
@@ -155,8 +147,7 @@ void datmo::perform_basic_clustering()
 
 } // perform_basic_clustering
 
-void datmo::perform_advanced_clustering()
-{
+void datmo::perform_advanced_clustering() {
     /* for each cluster, we update:
         - cluster_size to store the size of the cluster ie, the euclidian distance between the first hit of the cluster and the last one
         - cluster_middle to store the middle of the cluster
@@ -164,8 +155,7 @@ void datmo::perform_advanced_clustering()
 
     ROS_INFO("perform advanced clustering");
 
-    for (int loop_cluster = 0; loop_cluster < nb_clusters; loop_cluster++)
-    {
+    for (int loop_cluster = 0; loop_cluster < nb_clusters; loop_cluster++) {
         int start = cluster_start[loop_cluster];
         int end = cluster_end[loop_cluster];
         cluster_size[loop_cluster] = distancePoints(current_scan[end], current_scan[start]);
@@ -178,15 +168,12 @@ void datmo::perform_advanced_clustering()
 
 } // perform_advanced_clustering
 
-int datmo::compute_nb_dynamic(int start, int end)
-{
+int datmo::compute_nb_dynamic(int start, int end) {
     //  return the number of points that are dynamic between start and end
 
     int nb_dynamic = 0;
-    for (int i = start; i <= end; i++)
-    {
-        if (dynamic[i])
-        {
+    for (int i = start; i <= end; i++) {
+        if (dynamic[i]) {
             nb_dynamic++;
         }
     }
@@ -196,8 +183,7 @@ int datmo::compute_nb_dynamic(int start, int end)
 // DETECTION OF PERSONS
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void datmo::detect_legs()
-{
+void datmo::detect_legs() {
     // TO COMPLETE
     // a leg is a cluster:
     // - with a size higher than "leg_size_min";
@@ -210,8 +196,7 @@ void datmo::detect_legs()
     for (int loop = 0; loop < nb_clusters; loop++) // loop over all the clusters
     {
 
-        if (cluster_size[loop] > leg_size_min && cluster_size[loop] < leg_size_max)
-        {
+        if (cluster_size[loop] > leg_size_min && cluster_size[loop] < leg_size_max) {
             leg_cluster[nb_legs_detected] = loop;
             leg_dynamic[nb_legs_detected] = (cluster_dynamic[loop] > dynamic_threshold);
             leg_detected[nb_legs_detected] = cluster_middle[loop];
@@ -221,8 +206,7 @@ void datmo::detect_legs()
     ROS_INFO("legs detected");
 } // detect_legs
 
-void datmo::detect_persons()
-{
+void datmo::detect_persons() {
 
     // TO COMPLETE
     //  a person has two legs located at less than "legs_distance_max" one from the other
@@ -234,12 +218,12 @@ void datmo::detect_persons()
     nb_persons_detected = 0;
 
     for (int loop_leg_right = 0; loop_leg_right < nb_legs_detected; loop_leg_right++)
-        for (int loop_leg_left = loop_leg_right + 1; loop_leg_left < nb_legs_detected; loop_leg_left++)
-        {
-            if (distancePoints(leg_detected[loop_leg_left], leg_detected[loop_leg_right]) <= legs_distance_max)
-            {
-                person_detected[nb_persons_detected].x = (leg_detected[loop_leg_left].x + leg_detected[loop_leg_right].x) / 2;
-                person_detected[nb_persons_detected].y = (leg_detected[loop_leg_left].y + leg_detected[loop_leg_right].y) / 2;
+        for (int loop_leg_left = loop_leg_right + 1; loop_leg_left < nb_legs_detected; loop_leg_left++) {
+            if (distancePoints(leg_detected[loop_leg_left], leg_detected[loop_leg_right]) <= legs_distance_max) {
+                person_detected[nb_persons_detected].x =
+                        (leg_detected[loop_leg_left].x + leg_detected[loop_leg_right].x) / 2;
+                person_detected[nb_persons_detected].y =
+                        (leg_detected[loop_leg_left].y + leg_detected[loop_leg_right].y) / 2;
                 person_dynamic[nb_persons_detected] = leg_dynamic[loop_leg_left] && leg_dynamic[loop_leg_right];
                 leg_left[nb_persons_detected] = loop_leg_left;
                 leg_right[nb_persons_detected] = loop_leg_right;
@@ -251,8 +235,7 @@ void datmo::detect_persons()
 
 } // detect_persons
 
-void datmo::detect_a_moving_person()
-{
+void datmo::detect_a_moving_person() {
 
     // we store the moving_person_detected in person_tracked
     // we update is_person_tracked
@@ -269,19 +252,16 @@ void datmo::detect_a_moving_person()
 
     int dynamicper = 0;
 
-    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++)
-    {
+    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++) {
         current_distance = distancePoints(p, person_detected[loop_persons]);
-        if (person_dynamic[loop_persons] && (current_distance < distance_min))
-        {
+        if (person_dynamic[loop_persons] && (current_distance < distance_min)) {
             dynamicper++;
             distance_min = current_distance;
             person_tracked = person_detected[loop_persons];
         }
     }
 
-    if (nb_persons_detected > 0 && dynamicper > 0)
-    {
+    if (nb_persons_detected > 0 && dynamicper > 0) {
         is_person_tracked = true;
         pub_datmo.publish(person_tracked);
         // Pour debug
@@ -295,8 +275,7 @@ void datmo::detect_a_moving_person()
 // TRACKING OF A PERSON
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void datmo::track_a_person()
-{
+void datmo::track_a_person() {
 
     ROS_INFO("tracking a person");
 
@@ -309,44 +288,41 @@ void datmo::track_a_person()
     geometry_msgs::Point reset;
 
     // association between the tracked person and the possible detection
-    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++)
-    {
+    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++) {
         // we search for the person_detected which is the closest one to the person_tracked
         // we store the related information in index_min and distance_min
         current_distance = distancePoints(person_tracked, person_detected[loop_persons]);
-        if (current_distance < distance_min && current_distance < uncertainty)
-        {
+        if (current_distance < distance_min && current_distance < uncertainty) {
             index_min = loop_persons;
             distance_min = current_distance;
             associated = true;
         }
     }
 
-    if (associated)
-    {
+    if (associated) {
         // update the information related to the person_tracked, frequency and uncertainty knowing that there is an association
         // should we publish or not person_tracked ?
         person_tracked = person_detected[index_min];
         uncertainty = uncertainty_min;
         frequency++;
-        pub_datmo.publish(person_tracked);
-    }
-    else
-    {
+        //pub_datmo.publish(person_tracked);
+        pub_person_position(person_tracked);
+    } else {
         // update the information related to the person_tracked, frequency and uncertainty knowing that there is no association
         // should we publish or not person_tracked ?
         uncertainty += uncertainty_inc;
         frequency--;
     }
 
-    if (frequency == 0)
-    {
+    if (frequency == 0) {
         is_person_tracked = false;
         frequency = 1;
         uncertainty = uncertainty_min;
         reset.x = 0;
         reset.y = 0;
         person_tracked = reset;
+        // Personne perdue
+        pub_person_position(person_tracked);
     }
 
     // do not forget to update person_tracked according to the current association
@@ -357,8 +333,7 @@ void datmo::track_a_person()
 // CALLBACKS
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void datmo::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
-{
+void datmo::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan) {
 
     new_laser = true;
     init_laser = true;
@@ -373,8 +348,7 @@ void datmo::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
 
     // store the range and the coordinates in cartesian framework of each hit
     float beam_angle = angle_min;
-    for (int loop = 0; loop < nb_beams; loop++, beam_angle += angle_inc)
-    {
+    for (int loop = 0; loop < nb_beams; loop++, beam_angle += angle_inc) {
         if ((scan->ranges[loop] < range_max) && (scan->ranges[loop] > range_min))
             r[loop] = scan->ranges[loop];
         else
@@ -391,8 +365,7 @@ void datmo::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan)
 
 } // scanCallback
 
-void datmo::robot_movingCallback(const std_msgs::Bool::ConstPtr &state)
-{
+void datmo::robot_movingCallback(const std_msgs::Bool::ConstPtr &state) {
 
     new_robot = true;
     init_robot = true;
@@ -404,8 +377,7 @@ void datmo::robot_movingCallback(const std_msgs::Bool::ConstPtr &state)
 /*//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
-void datmo::display_motion()
-{
+void datmo::display_motion() {
 
     ROS_INFO("\n");
     ROS_INFO("display motion");
@@ -413,8 +385,7 @@ void datmo::display_motion()
     std_msgs::ColorRGBA color;
 
     for (int loop_hit = 0; loop_hit < nb_beams; loop_hit++)
-        if (dynamic[loop_hit])
-        {
+        if (dynamic[loop_hit]) {
             marker_motion.points.push_back(current_scan[loop_hit]);
 
             // choose color of marker point here
@@ -452,16 +423,14 @@ void datmo::display_motion()
 
 } // display_motion
 
-void datmo::display_clustering()
-{
+void datmo::display_clustering() {
 
     ROS_INFO("\n");
     ROS_INFO("display clusters ");
     ROS_INFO("%d clusters have been detected.\n", nb_clusters);
     std_msgs::ColorRGBA color;
 
-    for (int loop_cluster = 0; loop_cluster < nb_clusters; loop_cluster++)
-    {
+    for (int loop_cluster = 0; loop_cluster < nb_clusters; loop_cluster++) {
 
         int start = cluster_start[loop_cluster];
         int end = cluster_end[loop_cluster];
@@ -534,8 +503,7 @@ void datmo::display_clustering()
 
 } // display_clusters
 
-void datmo::display_legs()
-{
+void datmo::display_legs() {
 
     ROS_INFO("\n");
     ROS_INFO("display legs");
@@ -543,12 +511,10 @@ void datmo::display_legs()
 
     std_msgs::ColorRGBA color;
 
-    for (int loop_leg = 0; loop_leg < nb_legs_detected; loop_leg++)
-    {
+    for (int loop_leg = 0; loop_leg < nb_legs_detected; loop_leg++) {
         int cluster = leg_cluster[loop_leg];
 
-        if (leg_dynamic[loop_leg])
-        {
+        if (leg_dynamic[loop_leg]) {
             ROS_INFO("moving leg found: %i -> cluster = %i, (%f, %f), size: %f, dynamic: %i",
                      loop_leg,
                      cluster,
@@ -556,9 +522,7 @@ void datmo::display_legs()
                      leg_detected[loop_leg].y,
                      cluster_size[cluster],
                      cluster_dynamic[cluster]);
-        }
-        else
-        {
+        } else {
             ROS_INFO("static leg found: %i -> cluster = %i, (%f, %f), size: %f, dynamic: %i",
                      loop_leg,
                      cluster,
@@ -569,21 +533,17 @@ void datmo::display_legs()
         }
 
         for (int loop_hit = 0; loop_hit < nb_beams; loop_hit++)
-            if (loop_hit >= cluster_start[cluster] && loop_hit <= cluster_end[cluster])
-            {
+            if (loop_hit >= cluster_start[cluster] && loop_hit <= cluster_end[cluster]) {
 
                 // moving legs are yellow
                 marker_legs.points.push_back(current_scan[loop_hit]);
 
-                if (leg_dynamic[loop_leg])
-                {
+                if (leg_dynamic[loop_leg]) {
                     color.r = 1;
                     color.g = 1;
                     color.b = 0;
                     color.a = 1.0;
-                }
-                else
-                {
+                } else {
                     color.r = 1;
                     color.g = 1;
                     color.b = 1;
@@ -618,8 +578,7 @@ void datmo::display_legs()
 
 } // display_legs
 
-void datmo::display_persons()
-{
+void datmo::display_persons() {
 
     ROS_INFO("\n");
     ROS_INFO("displaying persons");
@@ -627,15 +586,13 @@ void datmo::display_persons()
 
     std_msgs::ColorRGBA color;
 
-    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++)
-    {
+    for (int loop_persons = 0; loop_persons < nb_persons_detected; loop_persons++) {
         int left = leg_left[loop_persons];
         int right = leg_right[loop_persons];
 
         marker_persons.points.push_back(person_detected[loop_persons]);
 
-        if (person_dynamic[loop_persons])
-        {
+        if (person_dynamic[loop_persons]) {
             ROS_INFO("moving person detected[%i](%f, %f): leg[%i](%f, %f) + leg[%i](%f, %f)",
                      loop_persons,
                      person_detected[loop_persons].x,
@@ -651,9 +608,7 @@ void datmo::display_persons()
             color.g = 1;
             color.b = 0;
             color.a = 1.0;
-        }
-        else
-        {
+        } else {
             ROS_INFO("%d left leg", cluster_dynamic[left]);
             ROS_INFO("%d right leg", cluster_dynamic[right]);
             ROS_INFO("static person detected[%i](%f, %f): leg[%i](%f, %f) + leg[%i](%f, %f)",
@@ -699,8 +654,7 @@ void datmo::display_persons()
 
 } // display_persons
 
-void datmo::display_a_tracked_person()
-{
+void datmo::display_a_tracked_person() {
 
     ROS_INFO("\n");
     ROS_INFO("displaying the tracked person");
@@ -708,8 +662,7 @@ void datmo::display_a_tracked_person()
     std_msgs::ColorRGBA color;
 
     if (is_person_tracked)
-        if (associated)
-        {
+        if (associated) {
             ROS_INFO("the tracked person has been detected at: (%f, %f) with frequency = %i and uncertainty = %f",
                      person_tracked.x,
                      person_tracked.y,
@@ -724,14 +677,13 @@ void datmo::display_a_tracked_person()
             color.a = 1.0;
 
             marker_tracked_person.colors.push_back(color);
-        }
-        else if (!associated)
-        {
-            ROS_INFO("the tracked person has not been detected and is still at: (%f, %f) with frequency = %i and uncertainty = %f",
-                     person_tracked.x,
-                     person_tracked.y,
-                     frequency,
-                     uncertainty);
+        } else if (!associated) {
+            ROS_INFO(
+                    "the tracked person has not been detected and is still at: (%f, %f) with frequency = %i and uncertainty = %f",
+                    person_tracked.x,
+                    person_tracked.y,
+                    frequency,
+                    uncertainty);
 
             marker_tracked_person.points.push_back(person_tracked);
 
@@ -741,8 +693,7 @@ void datmo::display_a_tracked_person()
             color.a = 1.0;
 
             marker_tracked_person.colors.push_back(color);
-        }
-        else
+        } else
             ROS_WARN("the tracked person has been lost");
 
     // Fill remaining fields of marker message
@@ -769,8 +720,7 @@ void datmo::display_a_tracked_person()
 }
 
 // Draw the field of view and other references
-void datmo::populateMarkerReference()
-{
+void datmo::populateMarkerReference() {
 
     visualization_msgs::Marker references;
 
@@ -802,8 +752,7 @@ void datmo::populateMarkerReference()
 
     float beam_angle = -2.092350 + 0.0057856218349117;
     // first and last beam are already included
-    for (int i = 0; i < 723; i++, beam_angle += 0.0057856218349117)
-    {
+    for (int i = 0; i < 723; i++, beam_angle += 0.0057856218349117) {
         v.x = 5.6 * cos(beam_angle);
         v.y = 5.6 * sin(beam_angle);
         v.z = 0.0;

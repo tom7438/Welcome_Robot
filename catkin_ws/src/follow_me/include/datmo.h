@@ -61,6 +61,8 @@ private:
     ros::Publisher pub_datmo_marker, pub_motion_marker, pub_clusters_marker,
                    pub_legs_marker, pub_persons_marker, pub_tracked_person_marker;
 
+    ros::Publisher pub_person_position;
+
     // to store, process and display laserdata
     bool init_laser, new_laser;
     int nb_beams;

@@ -70,9 +70,12 @@ void datmo::update()
         display_persons();
 
         // When do we do detection and when do we do tracking ?
+
+        // Detect a person and track it in its field of view
         detect_a_moving_person();
-        track_a_person();
-        display_a_tracked_person();
+
+        //track_a_person();
+        //display_a_tracked_person();
 
         /*do not change this part*/
         populateMarkerReference();
